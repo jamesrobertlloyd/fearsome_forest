@@ -1,6 +1,6 @@
 '''
 Short program that only gets one file
-To be used as a subprocess to catch errors
+To be used as a subprocess to prevent errors messing up main thread
 '''
 
 import sys
@@ -10,5 +10,4 @@ remotepath = sys.argv[1]
 localpath = sys.argv[2]
 
 with pyfear.fear() as fear:
-    # This should be a non pysftp function!
-    fear._connection.get(remotepath=remotepath, localpath=localpath)
+    fear._get(remotepath=remotepath, localpath=localpath)
