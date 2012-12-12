@@ -11,6 +11,8 @@ import credentials # Contains USERNAME and PASSWORD
 from subprocess_timeout import timeoutCommand
 import os
 import re
+import tempfile
+import time
 
 class fear(object):
     '''
@@ -61,20 +63,20 @@ class fear(object):
         return output
     
     def file_exists(self, remote_path):
-        #### Replace this with an ls statement?
+        #### TODO - Replace this with an ls statement?
         response = self.command('if [ -e %s ] \nthen \necho ''exists'' \nfi' % remote_path)
         return response == ['exists\n']
     
-    def qsub(self, shell_file, temp_folder, verbose=True, fear=None):
+    def qsub(self, shell_file, verbose=True):
         '''
         Submit a job onto the stack.
         Currently runs jobs from the same folder as they are saved in.
         '''
         fear_string = ' '.join(['. /usr/local/grid/divf2/common/settings.sh;',
-                                'cd %s;' % temp_folder,
-                                'chmod +x %s;' % os.path.split(shell_file)[1],
+                                'cd %s;' % os.path.split(shell_file)[0],
+                                'chmod +x %s;' % os.path.split(shell_file)[-1],
                                 'qsub -l lr=0',
-                                os.path.split(shell_file)[1] + ';',
+                                os.path.split(shell_file)[-1] + ';',
                                 'cd ..'])
     
         if verbose:
@@ -132,5 +134,112 @@ class fear(object):
         else:
             return False
 
+def mkstemp_safe(directory, suffix):
+    (os_file_handle, file_name) = tempfile.mkstemp(dir=directory, suffix=suffix)
+    os.close(os_file_handle)
+    return file_name
 
+def run_python_jobs(scripts, local_temp_path, remote_temp_path, my_fear, verbose=True, re_submit_wait=30):
+    '''
+    Receives a list of python code to run
+
+    Assumes the code has an output file that will be managed by this function
+    
+    Returns a list of local file names where the code has presumably stored output
+    '''
+    if my_fear is None:
+        fear = fear()
+    else:
+        fear = my_fear
+    
+    script_files = []
+    shell_files = []
+    output_files = []
+    job_ids = []    
+
+    # Create files and submit jobs
+
+    for (i, code) in enumerate(scripts):
+        # Create necessary files in local path
+        script_files.append(mkstemp_safe(local_temp_path, '.py'))
+        shell_files.append(mkstemp_safe(local_temp_path, '.sh'))
+        output_files.append(mkstemp_safe(local_temp_path, '.p'))
+        # Customise code
+        code = code % {'output_file': os.path.split(output_files[i])[-1]}#os.path.join(remote_temp_path, os.path.split(output_files[i])[-1])}
+        # Write code and shell file
+        with open(script_files[i], 'w') as f:
+            f.write(code)
+        with open(shell_files[i], 'w') as f:
+            f.write('python ' + os.path.split(script_files[i])[-1] + '\n') # Could change this to an absolute path
+        # Transfer files to fear
+        fear.copy_to(script_files[i], os.path.join(remote_temp_path, os.path.split(script_files[i])[-1]))
+        fear.copy_to(shell_files[i], os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]))
+        # fear.copy_to(output_files[i], os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]))
+        # Submit the job to fear
+        job_ids.append(fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose))
         
+    # Wait for and read in results
+
+    fear_finished = False
+    job_finished = [False] * len(output_files)
+    results = [None] * len(output_files)
+
+    while not fear_finished:
+        for (i, output_file) in enumerate(output_files):
+            if not job_finished[i]:
+                # Update job status
+                fear.qstat()
+                if fear.job_terminated(job_ids[i]):
+                    if not fear.file_exists(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1])):
+                        # Job has finished but no output - re-submit
+                        print 'Shell script %s job_id %s failed, re-submitting...' % (shell_files[i], job_ids[i])
+                        job_ids[i] = fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose)
+                    else:
+                        # Job has finished successfully
+                        job_finished[i] = True
+                        # Copy output file from fear - this can fail
+                        #### TODO - package this up nicely
+                        file_copied = False
+                        attempts = 0
+                        while (not file_copied) and (attempts < 5):
+                            file_copied = fear.copy_from(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]), output_files[i])[0]
+                            attempts += 1
+                        if file_copied:
+                            # Tidy up fear
+                            fear.rm(os.path.join(remote_temp_path, os.path.split(script_files[i])[-1]))
+                            fear.rm(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]))
+                            fear.rm(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]))
+                            fear.rm(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]) + '*') # Kills temporary output files
+                            os.remove(script_files[i])
+                            os.remove(shell_files[i])
+                            # Tell the world
+                            if verbose:
+                                print '%d / %d jobs complete' % (sum(job_finished), len(job_finished))
+                        else:
+                            # Cannot copy file for some reason - delete it and try again
+                            print 'Could not copy %s from job id %s, re-submitting...' % (os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]), job_ids[i])
+                            job_finished[i] = False
+                            fear.rm(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]))
+                            job_ids[i] = fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose)                            
+                        
+                elif not (fear.job_queued(job_ids[i]) or fear.job_running(job_ids[i]) \
+                          or fear.job_loading(job_ids[i])):
+                    # Job has some status other than running or queuing - something is wrong, delete and re-submit
+                    fear.qdel(job_ids[i])
+                    print 'Shell script %s job_id %s stuck, deleting and re-submitting...' % (shell_files[i], job_ids[i])
+                    job_ids[i] = fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose)
+        
+        if all(job_finished):
+            fear_finished = True    
+        if not fear_finished:
+            # Count how many jobs are queued
+            n_queued = len([1 for job_id in job_ids if fear.job_queued(job_id)])
+            # Count how many jobs are running
+            n_running = len([1 for job_id in job_ids if fear.job_running(job_id)])
+            if verbose:
+                print '%d jobs running' % n_running
+                print '%d jobs queued' % n_queued
+                print 'Sleeping for %d seconds' % re_submit_wait
+                time.sleep(re_submit_wait)
+
+    return output_files
