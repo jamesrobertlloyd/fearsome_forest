@@ -55,6 +55,10 @@ def rf_r_test(n=10):
     return RMSE(X_test, y_test, ens)
 
 tree_code = '''
+import sys
+
+sys.path.append('/users/jrl44/python')
+
 import pickle
 from sklearn.ensemble import RandomForestRegressor
 import numpy as np
@@ -74,14 +78,14 @@ prediction = estimator.predict(X_test)
 # Output
 np.savetxt('%(output_file)s', prediction, delimiter=',')
 print "Moving output file"
-#subprocess.call(['scp', '-i', '/users/jrl44/.ssh/jrl44fear2sagarmatha', '%(output_file)s', 'jrl44@sagarmatha:~/Documents/Research/RF/fearsome_forest/temp/%(output_file)s'])
 if not timeoutCommand(cmd=' '.join(['scp', '-i', '/users/jrl44/.ssh/jrl44fear2sagarmatha', '%(output_file)s', 'jrl44@sagarmatha:~/Documents/Research/RF/fearsome_forest/temp/%(output_file)s', ';', 'rm', '%(output_file)s'])).run(timeout=120)[0]:
     print('I ran')
     raise RuntimeError('Copying output raised error or timed out')
 print 'Writing completion flag'
 with open('%(flag_file)s', 'w') as f:
     f.write('Goodbye, world')
-'Wrote output'
+print 'Wrote output'
+print "Goodbye, world"
 quit()
 '''
 

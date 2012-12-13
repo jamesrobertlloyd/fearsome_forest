@@ -36,7 +36,7 @@ class fear(object):
         '''
         Connect to fear and store connection object
         '''
-        self._connection = pysftp.Connection('fear', username=credentials.USERNAME, password=credentials.PASSWORD)
+        self._connection = pysftp.Connection('fear', private_key=credentials.PRIVATE_KEY_FILE)#username=credentials.USERNAME, password=credentials.PASSWORD)
         
     def disconnect(self):
         self._connection.close()
