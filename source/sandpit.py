@@ -58,6 +58,8 @@ tree_code = '''
 import pickle
 from sklearn.ensemble import RandomForestRegressor
 import numpy as np
+import subprocess
+from subprocess_timeout import timeoutCommand
 # Load data
 print 'Loading data'
 with open('%(data_file)s', 'r') as f:
@@ -71,9 +73,19 @@ prediction = estimator.predict(X_test)
 'Predicted'
 # Output
 np.savetxt('%(output_file)s', prediction, delimiter=',')
+print "Moving output file"
+#subprocess.call(['scp', '-i', '/users/jrl44/.ssh/jrl44fear2sagarmatha', '%(output_file)s', 'jrl44@sagarmatha:~/Documents/Research/RF/fearsome_forest/temp/%(output_file)s'])
+if not timeoutCommand(cmd=' '.join(['scp', '-i', '/users/jrl44/.ssh/jrl44fear2sagarmatha', '%(output_file)s', 'jrl44@sagarmatha:~/Documents/Research/RF/fearsome_forest/temp/%(output_file)s', ';', 'rm', '%(output_file)s'])).run(timeout=120)[0]:
+    print('I ran')
+    raise RuntimeError('Copying output raised error or timed out')
+print 'Writing completion flag'
+with open('%(flag_file)s', 'w') as f:
+    f.write('Goodbye, world')
 'Wrote output'
 quit()
 '''
+
+#### TODO - put the file copying into a separate thread to avoid hanging programs should something happen
 
 # with open('%(output_file)s', 'w') as f:
 #     pickle.dump((estimator, prediction), f)
@@ -99,12 +111,16 @@ def rf_fear_test(n=10,n_trees=1000):
     scripts = [tree_code % {'data_file' : os.path.split(data_file)[-1],
                             'n_trees' : n_trees,
                             'random_state' : i * n_trees,
-                            'output_file' : '%(output_file)s'} for i in range(n)]
+                            'output_file' : '%(output_file)s',
+                            'flag_file' : '%(flag_file)s'} for i in range(n)]
     # Submit to fear
     with pyfear.fear() as fear:
         fear.copy_to(data_file, os.path.join(remote_temp_path, os.path.split(data_file)[-1]))
         output_files = pyfear.run_python_jobs(scripts, local_temp_path, remote_temp_path, fear)
         fear.rm(os.path.join(remote_temp_path, os.path.split(data_file)[-1]))
+
+    # Kill local data file
+    os.remove(data_file)    
 
     # Now do something with the output
 

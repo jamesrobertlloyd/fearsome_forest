@@ -31,11 +31,15 @@ class timeoutCommand(object):
         if thread.is_alive():
             if self.verbose:
                 print 'Terminating process'
-            self.process.terminate()
-            thread.join()
-            if self.verbose:    
-                print self.process.returncode
-            return (False, self.process.returncode)
+            try:
+                self.process.terminate()
+                thread.join()
+                if self.verbose:    
+                    print self.process.returncode                
+                return (False, self.process.returncode)
+            except:
+                print 'Could not terminate process - maybe there was a race'
+                return (False, 0)
         else:
             if self.verbose:    
                 print self.process.returncode

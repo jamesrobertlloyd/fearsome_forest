@@ -155,6 +155,7 @@ def run_python_jobs(scripts, local_temp_path, remote_temp_path, my_fear, verbose
     script_files = []
     shell_files = []
     output_files = []
+    flag_files = []
     job_ids = []    
 
     # Create files and submit jobs
@@ -163,9 +164,11 @@ def run_python_jobs(scripts, local_temp_path, remote_temp_path, my_fear, verbose
         # Create necessary files in local path
         script_files.append(mkstemp_safe(local_temp_path, '.py'))
         shell_files.append(mkstemp_safe(local_temp_path, '.sh'))
-        output_files.append(mkstemp_safe(local_temp_path, '.p'))
+        output_files.append(mkstemp_safe(local_temp_path, '.dat'))
+        flag_files.append(mkstemp_safe(local_temp_path, '.flag'))
         # Customise code
-        code = code % {'output_file': os.path.split(output_files[i])[-1]}#os.path.join(remote_temp_path, os.path.split(output_files[i])[-1])}
+        code = code % {'output_file': os.path.split(output_files[i])[-1],
+                       'flag_file' : os.path.split(flag_files[i])[-1]}
         # Write code and shell file
         with open(script_files[i], 'w') as f:
             f.write(code)
@@ -174,7 +177,6 @@ def run_python_jobs(scripts, local_temp_path, remote_temp_path, my_fear, verbose
         # Transfer files to fear
         fear.copy_to(script_files[i], os.path.join(remote_temp_path, os.path.split(script_files[i])[-1]))
         fear.copy_to(shell_files[i], os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]))
-        # fear.copy_to(output_files[i], os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]))
         # Submit the job to fear
         job_ids.append(fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose))
         
@@ -185,12 +187,12 @@ def run_python_jobs(scripts, local_temp_path, remote_temp_path, my_fear, verbose
     results = [None] * len(output_files)
 
     while not fear_finished:
-        for (i, output_file) in enumerate(output_files):
+        for (i, flag_file) in enumerate(flag_files):
             if not job_finished[i]:
                 # Update job status
                 fear.qstat()
                 if fear.job_terminated(job_ids[i]):
-                    if not fear.file_exists(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1])):
+                    if not fear.file_exists(os.path.join(remote_temp_path, os.path.split(flag_files[i])[-1])):
                         # Job has finished but no output - re-submit
                         print 'Shell script %s job_id %s failed, re-submitting...' % (shell_files[i], job_ids[i])
                         job_ids[i] = fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose)
@@ -199,28 +201,31 @@ def run_python_jobs(scripts, local_temp_path, remote_temp_path, my_fear, verbose
                         job_finished[i] = True
                         # Copy output file from fear - this can fail
                         #### TODO - package this up nicely
-                        file_copied = False
-                        attempts = 0
-                        while (not file_copied) and (attempts < 5):
-                            file_copied = fear.copy_from(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]), output_files[i])[0]
-                            attempts += 1
+#                        file_copied = False
+#                        attempts = 0
+#                        while (not file_copied) and (attempts < 5):
+#                            file_copied = fear.copy_from(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]), output_files[i])[0]
+#                            attempts += 1
+                        file_copied = True
                         if file_copied:
                             # Tidy up fear
                             fear.rm(os.path.join(remote_temp_path, os.path.split(script_files[i])[-1]))
                             fear.rm(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]))
-                            fear.rm(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]))
+                            #fear.rm(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]))
+                            fear.rm(os.path.join(remote_temp_path, os.path.split(flag_files[i])[-1]))
                             fear.rm(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]) + '*') # Kills temporary output files
                             os.remove(script_files[i])
                             os.remove(shell_files[i])
+                            os.remove(flag_files[i])
                             # Tell the world
                             if verbose:
                                 print '%d / %d jobs complete' % (sum(job_finished), len(job_finished))
-                        else:
-                            # Cannot copy file for some reason - delete it and try again
-                            print 'Could not copy %s from job id %s, re-submitting...' % (os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]), job_ids[i])
-                            job_finished[i] = False
-                            fear.rm(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]))
-                            job_ids[i] = fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose)                            
+#                        else:
+#                            # Cannot copy file for some reason - delete it and try again
+#                            print 'Could not copy %s from job id %s, re-submitting...' % (os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]), job_ids[i])
+#                            job_finished[i] = False
+#                            fear.rm(os.path.join(remote_temp_path, os.path.split(output_files[i])[-1]))
+#                            job_ids[i] = fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose)                            
                         
                 elif not (fear.job_queued(job_ids[i]) or fear.job_running(job_ids[i]) \
                           or fear.job_loading(job_ids[i])):
