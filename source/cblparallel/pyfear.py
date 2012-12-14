@@ -178,6 +178,7 @@ def run_python_jobs(scripts, local_temp_path, remote_temp_path, my_fear, verbose
         fear.copy_to(script_files[i], os.path.join(remote_temp_path, os.path.split(script_files[i])[-1]))
         fear.copy_to(shell_files[i], os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]))
         # Submit the job to fear
+        print 'Job %d of %d' % (i + 1, len(scripts))
         job_ids.append(fear.qsub(os.path.join(remote_temp_path, os.path.split(shell_files[i])[-1]), verbose=verbose))
         
     # Wait for and read in results

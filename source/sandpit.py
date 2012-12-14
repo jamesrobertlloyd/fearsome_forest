@@ -79,20 +79,13 @@ prediction = estimator.predict(X_test)
 np.savetxt('%(output_file)s', prediction, delimiter=',')
 print "Moving output file"
 if not timeoutCommand(cmd=' '.join(['scp', '-i', '/users/jrl44/.ssh/jrl44fear2sagarmatha', '%(output_file)s', 'jrl44@sagarmatha:~/Documents/Research/RF/fearsome_forest/temp/%(output_file)s', ';', 'rm', '%(output_file)s'])).run(timeout=120)[0]:
-    print('I ran')
     raise RuntimeError('Copying output raised error or timed out')
 print 'Writing completion flag'
 with open('%(flag_file)s', 'w') as f:
     f.write('Goodbye, world')
-print 'Wrote output'
 print "Goodbye, world"
 quit()
 '''
-
-#### TODO - put the file copying into a separate thread to avoid hanging programs should something happen
-
-# with open('%(output_file)s', 'w') as f:
-#     pickle.dump((estimator, prediction), f)
 
 def mkstemp_safe(directory, suffix):
     (os_file_handle, file_name) = tempfile.mkstemp(dir=directory, suffix=suffix)

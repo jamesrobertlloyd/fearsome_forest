@@ -34,5 +34,6 @@ nosetests.xml
 .project
 .pydevproject
 
-# Secret files
-source/credentials.py
+# Uninteresting files
+*~
+.metadata/
