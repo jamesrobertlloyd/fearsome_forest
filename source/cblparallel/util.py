@@ -3,6 +3,7 @@ Miscellaneous utilities for cblparallel
 '''
 
 import tempfile
+import os
 
 def mkstemp_safe(directory, suffix):
     (os_file_handle, file_name) = tempfile.mkstemp(dir=directory, suffix=suffix)
