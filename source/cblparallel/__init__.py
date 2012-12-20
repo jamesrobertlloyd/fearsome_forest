@@ -88,7 +88,7 @@ quit()
 '''
     
     # Open a connection to fear
-    fear = fear()
+    fear = pyfear.fear()
     
     # Initialise lists of file locations job ids
     script_files = []
