@@ -6,6 +6,7 @@ Created on 23 Nov 2012
 
 #import pyfear
 import cblparallel
+import cblparallel.config
 import time
 from sklearn.cross_validation import cross_val_score
 from sklearn.datasets import make_blobs
@@ -88,12 +89,10 @@ print "Goodbye, world"
 quit()
 '''
 
-reduce_tree_code = '''
+reduced_tree_code = '''
 import pickle
 from sklearn.ensemble import RandomForestRegressor
 import numpy as np
-import subprocess
-from subprocess_timeout import timeoutCommand
 # Load data
 print 'Loading data'
 with open('%(data_file)s', 'r') as f:
@@ -173,7 +172,7 @@ def rf_fear_test2(n=10,n_trees=10):
     with open(data_file, 'w') as f:
         pickle.dump((X_train, y_train, X_test), f)
     # Prepare code
-    scripts = [tree_code % {'data_file' : os.path.split(data_file)[-1],
+    scripts = [reduced_tree_code % {'data_file' : os.path.join(cblparallel.config.REMOTE_TEMP_PATH, os.path.split(data_file)[-1]),
                             'n_trees' : n_trees,
                             'random_state' : i * n_trees,
                             'output_file' : '%(output_file)s',
@@ -183,6 +182,49 @@ def rf_fear_test2(n=10,n_trees=10):
         fear.copy_to(data_file, os.path.join(cblparallel.config.REMOTE_TEMP_PATH, os.path.split(data_file)[-1]))
         output_files = cblparallel.run_batch_on_fear(scripts)
         fear.rm(os.path.join(cblparallel.config.REMOTE_TEMP_PATH, os.path.split(data_file)[-1]))
+
+    # Kill local data file
+    os.remove(data_file)    
+
+    # Now do something with the output
+
+    estimators = []
+    predictions = []
+
+    for output_file in output_files:
+        with open(output_file, 'r') as f:
+            #(estimator, prediction) = pickle.load(f)
+            prediction = np.genfromtxt(output_file, delimiter=',')
+        os.remove(output_file)
+        #estimators.append(estimator)
+        predictions.append(prediction)
+
+    #ens = EnsembleRegressor(estimators)
+    #return RMSE(X_test, y_test, ens)
+
+    ens_pred = np.mean(predictions, axis=0)
+    return RMSE_y(y_test, ens_pred)
+    
+def local_forest_test(n=10,n_trees=10):
+    # Data
+    X, y = make_friedman1(n_samples=1200, random_state=0, noise=1.0)
+    X_train, X_test = X[:200], X[200:]
+    y_train, y_test = y[:200], y[200:]
+    # Params
+#    local_temp_path = os.path.abspath('../temp/')
+#    remote_temp_path = 'python/'
+    # Write data file locally
+    data_file = mkstemp_safe(cblparallel.config.LOCAL_TEMP_PATH, '.p')
+    with open(data_file, 'w') as f:
+        pickle.dump((X_train, y_train, X_test), f)
+    # Prepare code
+    scripts = [reduced_tree_code % {'data_file' : data_file,
+                            'n_trees' : n_trees,
+                            'random_state' : i * n_trees,
+                            'output_file' : '%(output_file)s',
+                            'flag_file' : '%(flag_file)s'} for i in range(n)]
+    # Run bacth in parallel)
+    output_files = cblparallel.run_batch_locally(scripts)
 
     # Kill local data file
     os.remove(data_file)    
