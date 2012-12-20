@@ -181,7 +181,7 @@ def rf_fear_test2(n=10,n_trees=10):
     # Submit to fear
     with cblparallel.fear() as fear:
         fear.copy_to(data_file, os.path.join(cblparallel.config.REMOTE_TEMP_PATH, os.path.split(data_file)[-1]))
-        output_files = pyfear.run_python_jobs(scripts)
+        output_files = cblparallel.run_batch_on_fear(scripts)
         fear.rm(os.path.join(cblparallel.config.REMOTE_TEMP_PATH, os.path.split(data_file)[-1]))
 
     # Kill local data file
