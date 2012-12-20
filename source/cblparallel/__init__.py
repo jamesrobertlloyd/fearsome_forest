@@ -8,6 +8,7 @@ James Robert Lloyd (jrl44@cam.ac.uk)
 
 """
 
+import pyfear
 from pyfear import fear
 from util import mkstemp_safe
 
