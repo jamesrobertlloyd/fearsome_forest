@@ -82,11 +82,11 @@ quit()
   
     #### TODO - Is this completely stable       
     matlab_completion_code = '''
-fprintf('\nWriting completion flag\n');
+fprintf('\\nWriting completion flag\\n');
 ID = fopen('%(flag_file)s', 'w');
 fprintf(ID, 'Goodbye, world');
 fclose(ID);
-fprintf('\nGoodbye, World\n');
+fprintf('\\nGoodbye, World\\n');
 quit()
 '''
     
@@ -115,7 +115,7 @@ quit()
         if language == 'python':
             code = python_path_code + code + python_transfer_code + python_completion_code
         elif language == 'matlab':
-            code = matlab_single_thread + matlab_path_code + code + matlab_transfer_code + matlab_completion_code
+            code = matlab_path_code + code + matlab_transfer_code + matlab_completion_code
         code = code % {'output_file': os.path.join(REMOTE_TEMP_PATH, os.path.split(output_files[i])[-1]),
                        'flag_file' : os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1])}
         # Write code and shell file
@@ -126,8 +126,8 @@ quit()
             if language == 'python':
                 f.write('python ' + os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]) + '\n')
             elif language == 'matlab':
-                f.write('/usr/local/apps/matlab/matlabR2011b/bin/matlab -nosplash -nojvm -nodisplay -singleCompThread -r ' + \
-                        os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1].split('.')[0]) + '\n')
+                f.write('cd ' + REMOTE_TEMP_PATH + ';\n' + REMOTE_MATLAB + ' -nosplash -nojvm -nodisplay -singleCompThread -r ' + \
+                        os.path.split(script_files[i])[-1].split('.')[0] + '\n')
         # Transfer files to fear
         fear.copy_to(script_files[i], os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]))
         fear.copy_to(shell_files[i], os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]))
@@ -191,7 +191,7 @@ quit()
     #### TODO - return job output and error files as applicable (e.g. there may be multiple error files associated with one script)
     return output_files
     
-def run_batch_locally(scripts, language='python', max_cpu=0.8, max_mem=0.8, submit_sleep=2, job_check_sleep=30, file_copy_timeout=120, verbose=True):
+def run_batch_locally(scripts, language='python', paths=[], max_cpu=0.9, max_mem=0.9, submit_sleep=1, job_check_sleep=30, file_copy_timeout=120, verbose=True):
     '''
     Receives a list of python scripts to run
 
@@ -206,6 +206,15 @@ def run_batch_locally(scripts, language='python', max_cpu=0.8, max_mem=0.8, subm
     matlab_single_thread = '''
 maxNumCompThreads(1);
 '''
+
+    python_path_code = '''
+import sys
+sys.path.append('%s')
+'''
+
+    matlab_path_code = '''
+addpath(genpath('%s'))
+'''
        
     python_completion_code = '''
 print 'Writing completion flag'
@@ -217,11 +226,11 @@ quit()
   
     #### TODO - Is this completely stable       
     matlab_completion_code = '''
-fprintf('\nWriting completion flag\n');
+fprintf('\\nWriting completion flag\\n');
 ID = fopen('%(flag_file)s', 'w');
 fprintf(ID, 'Goodbye, world');
 fclose(ID);
-fprintf('\nGoodbye, World\n');
+fprintf('\\nGoodbye, World\\n');
 quit()
 '''
     
@@ -249,7 +258,7 @@ quit()
                     if language == 'python':
                         script_files[i] = (mkstemp_safe(LOCAL_TEMP_PATH, '.py'))
                     elif language == 'matlab':
-                        script_files[i] = (mkstemp_safe(LOCAL_TEMP_PATH, '.mat'))
+                        script_files[i] = (mkstemp_safe(LOCAL_TEMP_PATH, '.m'))
                     # Create necessary files in local path
                     shell_files[i] = (mkstemp_safe(LOCAL_TEMP_PATH, '.sh'))
                     output_files[i] = (mkstemp_safe(LOCAL_TEMP_PATH, '.out'))
@@ -259,8 +268,12 @@ quit()
                     #### TODO - make path and output_transfer optional
                     if language == 'python':
                         code = code + python_completion_code
+                        for path in paths:
+                            code = (python_path_code % path) + code
                     elif language == 'matlab':
-                        code = matlab_single_thread + code + matlab_completion_code
+                        code = code + matlab_completion_code
+                        for path in paths:
+                            code = (matlab_path_code % path) + code
                     code = code % {'output_file': output_files[i],
                                    'flag_file' : flag_files[i]}
                     # Write code and shell file
@@ -271,8 +284,8 @@ quit()
                         if language == 'python':
                             f.write('python ' + script_files[i] + '\n')
                         elif language == 'matlab':
-                            f.write(LOCAL_MATLAB + ' -nosplash -nojvm -nodisplay -singleCompThread -r ' + \
-                                    script_files[i].split('.')[0] + '\n')
+                            f.write('cd ' + os.path.split(script_files[i])[0] + ';\n' + LOCAL_MATLAB + ' -nosplash -nojvm -nodisplay -singleCompThread -r ' + \
+                                    os.path.split(script_files[i])[-1].split('.')[0] + '\n')
                     # Start running the job
                     print 'Submitting job %d of %d' % (i + 1, len(scripts))
                     stdout_file_handles[i] = open(stdout_files[i], 'w')

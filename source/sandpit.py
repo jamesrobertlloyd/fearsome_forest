@@ -247,6 +247,28 @@ def local_forest_test(n=10,n_trees=10):
 
     ens_pred = np.mean(predictions, axis=0)
     return RMSE_y(y_test, ens_pred)
+    
+matlab_code='''
+x = pi + randn
+csvwrite('%(output_file)s', x)
+'''
+    
+def local_matlab_test(n=10):
+    # Prepare code
+    scripts = [matlab_code] * n
+    # Run bacth in parallel
+    output_files = cblparallel.run_batch_locally(scripts, language='matlab')  
+    # Now do something with the output
+    estimators = []
+
+    for output_file in output_files:
+        with open(output_file, 'r') as f:
+            estimator = np.genfromtxt(output_file, delimiter=',')
+        os.remove(output_file)
+        estimators.append(estimator)
+
+    ens_pred = np.mean(estimators)
+    return ens_pred
 
 def copy_test():
     with pyfear.fear() as fear:
