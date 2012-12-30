@@ -134,13 +134,6 @@ class fear(object):
             return self.status[job_id] == 'r'
         else:
             return False
-            
-    def jobs_running(self, update=True):
-        '''Returns number of jobs currently running'''
-        if update:
-            self.qstat()
-        # Count running jobs
-        return len(1 for job_id in self.status if job_running(job_id))
     
     def job_queued(self, job_id, update=False):
         if update:
@@ -157,3 +150,31 @@ class fear(object):
             return self.status[job_id] == 't'
         else:
             return False
+            
+    def jobs_running(self, update=True):
+        '''Returns number of jobs currently running'''
+        if update:
+            self.qstat()
+        # Count running jobs
+        return len([1 for job_id in self.status if job_running(job_id)])
+            
+    def jobs_queued(self, update=True):
+        '''Returns number of jobs currently queued'''
+        if update:
+            self.qstat()
+        # Count queued jobs
+        return len([1 for job_id in self.status if job_queued(job_id)])
+            
+    def jobs_loading(self, update=True):
+        '''Returns number of jobs currently loading'''
+        if update:
+            self.qstat()
+        # Count loading jobs
+        return len([1 for job_id in self.status if job_loading(job_id)])
+        
+    def jobs_alive(self, update=True):
+        '''Returns number of jobs currently running, queueing or loading'''
+        if update:
+            self.qstat()
+        # Count jobs
+        return jobs_running(update=False) + jobs_queued(update=False) + jobs_loading(update=False)
