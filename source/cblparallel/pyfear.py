@@ -7,7 +7,7 @@ common tasks
 '''
 
 import pysftp # Wraps up various paramiko calls
-import config # Contains USERNAME etc
+from config import * # Various constants such as USERNAME
 from util import timeoutCommand
 import os
 import re
@@ -36,12 +36,13 @@ class fear(object):
         '''
         Connect to fear and store connection object
         '''
-        self._connection = pysftp.Connection('fear', private_key=config.LOCAL_TO_REMOTE_KEY_FILE)
+        self._connection = pysftp.Connection('fear', private_key=LOCAL_TO_REMOTE_KEY_FILE)
         
     def disconnect(self):
         self._connection.close()
 
     def command(self, cmd):
+        #### TODO - Allow port forwarding / tunneling - can this be authenticated / os independent?
         output =  self._connection.execute(cmd)
         return output
         
@@ -53,10 +54,26 @@ class fear(object):
         self._connection.get(remotepath=remotepath, localpath=localpath)
         
     def copy_to(self, localpath, remotepath, timeout=10, verbose=False):
-        return timeoutCommand(cmd='python fear_put.py %s %s' % (localpath, remotepath), verbose=verbose).run(timeout=timeout) 
+        #### The below is commented out since it has a habit of crashing (hence the timeoutCammand wrapper)
+        #return timeoutCommand(cmd='python fear_put.py %s %s' % (localpath, remotepath), verbose=verbose).run(timeout=timeout)
+        #### TODO - Make this operating system independent
+        #### TODO - Allow port forwarding / tunneling via gate.eng.cam.ac.uk - can we make authentication work?
+        cmd = 'scp -i %(rsa_key)s %(localpath)s %(username)s@fear:%(remotepath)s' % {'rsa_key' : LOCAL_TO_REMOTE_KEY_FILE,
+                                                                                     'localpath' : localpath,
+                                                                                     'username' : USERNAME,
+                                                                                     'remotepath' : remotepath} 
+        return timeoutCommand(cmd=cmd, verbose=verbose).run(timeout=timeout)
         
     def copy_from(self, remotepath, localpath, timeout=10, verbose=False):
-        return timeoutCommand(cmd='python fear_get.py %s %s' % (remotepath, localpath), verbose=verbose).run(timeout=timeout)  
+        #### The below is commented out since it has a habit of crashing (hence the timeoutCammand wrapper)
+        #return timeoutCommand(cmd='python fear_get.py %s %s' % (remotepath, localpath), verbose=verbose).run(timeout=timeout)  
+        #### TODO - Make this operating system independent
+        #### TODO - Allow port forwarding / tunneling via gate.eng.cam.ac.uk - can we make authentication work?
+        cmd = 'scp -i %(rsa_key)s (username)s@fear:%(remotepath)s %(localpath)s' % {'rsa_key' : LOCAL_TO_REMOTE_KEY_FILE,
+                                                                                    'username' : USERNAME,
+                                                                                    'remotepath' : remotepath,
+                                                                                    'localpath' : localpath} 
+        return timeoutCommand(cmd=cmd, verbose=verbose).run(timeout=timeout)
         
     def rm(self, remote_path):
         output = self.command('rm %s' % remote_path)
@@ -91,14 +108,14 @@ class fear(object):
         return output
     
     def qdel_all(self):
-        output = self.command('. /usr/local/grid/divf2/common/settings.sh; qdel -u %s' % config.USERNAME)
+        output = self.command('. /usr/local/grid/divf2/common/settings.sh; qdel -u %s' % USERNAME)
         return output
     
     def qstat(self):
         '''Updates a dictionary with (job id, status) pairs'''
-        output = self.command('. /usr/local/grid/divf2/common/settings.sh; qstat -u %s' % config.USERNAME)
+        output = self.command('. /usr/local/grid/divf2/common/settings.sh; qstat -u %s' % USERNAME)
         # Now process this text to turn it into a list of job statuses
-        # First remove multiple spaces from the interesting lines
+        # First remove multiple spaces from the interesting lines (i.e. not header)
         without_multi_space = [re.sub(' +',' ',line) for line in output[2:]]
         # Now create a dictionary of job ids and statuses
         self.status = {key: value for (key, value) in zip([line.split(' ')[0] for line in without_multi_space], \
@@ -117,6 +134,13 @@ class fear(object):
             return self.status[job_id] == 'r'
         else:
             return False
+            
+    def jobs_running(self, update=True):
+        '''Returns number of jobs currently running'''
+        if update:
+            self.qstat()
+        # Count running jobs
+        return len(1 for job_id in self.status if job_running(job_id))
     
     def job_queued(self, job_id, update=False):
         if update:
