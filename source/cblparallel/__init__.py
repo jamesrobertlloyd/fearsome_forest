@@ -51,6 +51,7 @@ maxNumCompThreads(1);
 addpath(genpath('%s'))
 ''' % REMOTE_MATLAB_PATH
     
+    #### TODO - allow port forwarding / tunneling - copy to machine on network with more disk space than fear, then copy from that machine?
     python_transfer_code = '''
 from util import timeoutCommand
 print "Moving output file"
@@ -191,7 +192,8 @@ quit()
     #### TODO - return job output and error files as applicable (e.g. there may be multiple error files associated with one script)
     return output_files
     
-def run_batch_locally(scripts, language='python', paths=[], max_cpu=0.9, max_mem=0.9, submit_sleep=1, job_check_sleep=30, file_copy_timeout=120, verbose=True):
+def run_batch_locally(scripts, language='python', paths=[], max_cpu=0.9, max_mem=0.9, submit_sleep=1, job_check_sleep=30, \
+                      file_copy_timeout=120, verbose=True, max_files_open=100):
     '''
     Receives a list of python scripts to run
 
@@ -245,11 +247,13 @@ quit()
     fear_finished = False
     job_finished = [False] * len(scripts)  
     should_sleep = False 
+    
+    files_open = 0
 
     # Loop through jobs, submitting jobs whenever CPU usage low enough, re-submitting failed jobs
     while not fear_finished:
         for (i, code) in enumerate(scripts):
-            if (not job_finished[i]) and (processes[i] is None):
+            if (not job_finished[i]) and (processes[i] is None) and (files_open < max_files_open):
                 # This script has not been run - check CPU and potentially run
                 if (psutil.cpu_percent() < max_cpu * 100) and (psutil.virtual_memory().percent < max_mem * 100):
                     # Jobs can run, continue looping
@@ -289,6 +293,7 @@ quit()
                     # Start running the job
                     print 'Submitting job %d of %d' % (i + 1, len(scripts))
                     stdout_file_handles[i] = open(stdout_files[i], 'w')
+                    files_open = files_open + 1
                     processes[i] = subprocess.Popen(['sh', shell_files[i]], stdout = stdout_file_handles[i]);
                     # Sleep for a bit so the process can kick in (prevents 100s of jobs being sent to processor)
                     time.sleep(submit_sleep)
@@ -310,6 +315,7 @@ quit()
                     os.remove(script_files[i])
                     os.remove(shell_files[i])
                     stdout_file_handles[i].close()
+                    files_open = files_open - 1
                     os.remove(stdout_files[i])
                     os.remove(flag_files[i])
                     processes[i] = None
