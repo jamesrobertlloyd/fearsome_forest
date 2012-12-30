@@ -17,15 +17,18 @@ import psutil, subprocess, sys, time
 from config import *
 
 #### WISHLIST
+####  - Write setup function / make it possible for people to use this code without lots of hassle
+####  - Provide convenience functions to setup MATLAB/python paths
 ####  - Merge job handling code
 ####  - Return STDOUT and STDERR from scripts
 ####  - Allow job handling across gate.eng.cam.ac.uk 
 ####  - Write unit tests
 ####  - Write asynchronous job handling
+####  - Add support for jobs in arbitrary languages (will require more user input)
 
 def setup():
     '''
-    Run an interactive script to setup various prelminaries e.g.
+    Run an interactive script to setup various preliminaries e.g.
      - RSA key pairs
      - Fear .profile including script that makes qsub, qstat etc available
      - Local directory on fear with python scripts
@@ -42,7 +45,7 @@ def run_batch_on_fear(scripts, language='python', job_check_sleep=30, file_copy_
     '''
     Receives a list of python scripts to run
 
-    Assumes the code has an output file that will be managed by this function
+    Assumes the code has an output file - i.e. %(output_file)s - that will be managed by this function
     
     Returns a list of local file names where the code has presumably stored output
     '''
