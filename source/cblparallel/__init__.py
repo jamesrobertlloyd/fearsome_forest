@@ -8,13 +8,20 @@ James Robert Lloyd (jrl44@cam.ac.uk)
 
 """
 
-import pyfear
+import pyfear # Is this line necessary?
 from pyfear import fear
 from util import mkstemp_safe
 import os
 import psutil, subprocess, sys, time
 
 from config import *
+
+#### WISHLIST
+####  - Merge job handling code
+####  - Return STDOUT and STDERR from scripts
+####  - Allow job handling across gate.eng.cam.ac.uk 
+####  - Write unit tests
+####  - Write asynchronous job handling
 
 def setup():
     '''
@@ -96,121 +103,121 @@ fprintf('\\nGoodbye, World\\n');
 quit()
 '''
     
-    # Open a connection to fear
-    fear = pyfear.fear()
+    # Open a connection to fear as a with block - ensures connection is closed
+    with pyfear.fear() as fear:
     
-    # Initialise lists of file locations job ids
-    shell_files = [None] * len(scripts)
-    script_files = [None] * len(scripts)
-    output_files = [None] * len(scripts)
-    stdout_files = [None] * len(scripts)
-    flag_files = [None] * len(scripts)
-    job_ids = [None] * len(scripts) 
-    fear_finished = False
-    job_finished = [False] * len(scripts)  
-    should_sleep = False 
+        # Initialise lists of file locations job ids
+        shell_files = [None] * len(scripts)
+        script_files = [None] * len(scripts)
+        output_files = [None] * len(scripts)
+        stdout_files = [None] * len(scripts)
+        flag_files = [None] * len(scripts)
+        job_ids = [None] * len(scripts) 
+        fear_finished = False
+        job_finished = [False] * len(scripts)  
+        should_sleep = False 
 
-    # Loop through jobs, submitting jobs whenever fear usage low enough, re-submitting failed jobs
-    while not fear_finished:
-        for (i, code) in enumerate(scripts):
-            if (not job_finished[i]) and (job_ids[i] is None)
-                # This script has not been run - check number of jobs and potentially run
-                if fear.jobs_alive() <= max_jobs:
-                    # Jobs can run, continue looping
-                    should_sleep = False
-                    # Create necessary files in local path (avoids collisions)
-                    if language == 'python':
-                        script_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.py'))
-                    elif language == 'matlab':
-                        script_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.mat'))
-                    shell_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.sh'))
-                    output_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.out'))
-                    flag_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.flag'))
-                    # Customise code (path, transfer of output back to local host, flag file writing)
-                    #### TODO - make path and output_transfer optional
-                    if language == 'python':
-                        code = python_path_code + code + python_transfer_code + python_completion_code
-                    elif language == 'matlab':
-                        code = matlab_path_code + code + matlab_transfer_code + matlab_completion_code
-                    code = code % {'output_file': os.path.join(REMOTE_TEMP_PATH, os.path.split(output_files[i])[-1]),
-                                   'flag_file' : os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1])}
-                    # Write code and shell file
-                    with open(script_files[i], 'w') as f:
-                        f.write(code)
-                    with open(shell_files[i], 'w') as f:
-                        #### TODO - is os.path.join always correct - what happens if this program is being run on windows?
+        # Loop through jobs, submitting jobs whenever fear usage low enough, re-submitting failed jobs
+        while not fear_finished:
+            for (i, code) in enumerate(scripts):
+                if (not job_finished[i]) and (job_ids[i] is None)
+                    # This script has not been run - check number of jobs and potentially run
+                    if fear.jobs_alive() <= max_jobs:
+                        # Jobs can run, continue looping
+                        should_sleep = False
+                        # Create necessary files in local path (avoids collisions)
                         if language == 'python':
-                            f.write('python ' + os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]) + '\n')
+                            script_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.py'))
                         elif language == 'matlab':
-                            f.write('cd ' + REMOTE_TEMP_PATH + ';\n' + REMOTE_MATLAB + ' -nosplash -nojvm -nodisplay -singleCompThread -r ' + \
-                                    os.path.split(script_files[i])[-1].split('.')[0] + '\n')
-                    # Transfer files to fear
-                    fear.copy_to(script_files[i], os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]))
-                    fear.copy_to(shell_files[i], os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]))
-                    # Submit the job to fear
-                    print 'Submitting job %d of %d' % (i + 1, len(scripts))
-                    job_ids[i] = fear.qsub(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]), verbose=verbose)
-                else:
-                    # If this is the last thing to happen in the loop then might as well sleep for a bit to wait for stack to free up
-                    should_sleep = True
-            elif (not job_finished[i]) and (not job_ids[i] is None):
-                # Has the process terminated?
-                if fear.job_terminated(job_ids[i], update=True):
-                    if not fear.file_exists(os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1])):
-                        # Job has finished but no output - resubmit later
-                        #### TODO - Record the output and error file - and potentially remove them
-                        print 'Shell script %s job_id %s failed' % (os.path.split(shell_files[i])[-1], job_ids[i])
-                        job_ids[i] = None
+                            script_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.mat'))
+                        shell_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.sh'))
+                        output_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.out'))
+                        flag_files.append(mkstemp_safe(LOCAL_TEMP_PATH, '.flag'))
+                        # Customise code (path, transfer of output back to local host, flag file writing)
+                        #### TODO - make path and output_transfer optional
+                        if language == 'python':
+                            code = python_path_code + code + python_transfer_code + python_completion_code
+                        elif language == 'matlab':
+                            code = matlab_path_code + code + matlab_transfer_code + matlab_completion_code
+                        code = code % {'output_file': os.path.join(REMOTE_TEMP_PATH, os.path.split(output_files[i])[-1]),
+                                       'flag_file' : os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1])}
+                        # Write code and shell file
+                        with open(script_files[i], 'w') as f:
+                            f.write(code)
+                        with open(shell_files[i], 'w') as f:
+                            #### TODO - is os.path.join always correct - what happens if this program is being run on windows?
+                            if language == 'python':
+                                f.write('python ' + os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]) + '\n')
+                            elif language == 'matlab':
+                                f.write('cd ' + REMOTE_TEMP_PATH + ';\n' + REMOTE_MATLAB + ' -nosplash -nojvm -nodisplay -singleCompThread -r ' + \
+                                        os.path.split(script_files[i])[-1].split('.')[0] + '\n')
+                        # Transfer files to fear
+                        fear.copy_to(script_files[i], os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]))
+                        fear.copy_to(shell_files[i], os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]))
+                        # Submit the job to fear
+                        print 'Submitting job %d of %d' % (i + 1, len(scripts))
+                        job_ids[i] = fear.qsub(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]), verbose=verbose)
                     else:
-                        # Job has finished successfully
-                        job_finished[i] = True
-                        # Tell the world
-                        if verbose:
-                            print '%d / %d jobs complete' % (sum(job_finished), len(job_finished))
-                    # Tidy up fear
-                    fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]))
-                    fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]))
-                    fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1]))
-                    #### TODO - record the output and error files for future reference
-                    fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]) + '*') # Kills temporary output files
-                    # Tidy up local temporary directory
-                    os.remove(script_files[i])
-                    os.remove(shell_files[i])
-                    os.remove(flag_files[i])    
-                    job_ids[i] = None                     
-                        
-                elif not (fear.job_queued(job_ids[i]) or fear.job_running(job_ids[i]) \
-                          or fear.job_loading(job_ids[i])):
-                    # Job has some status other than running, queuing or loading - something is wrong, delete it
-                    #### TODO - Record the output and error file - and potentially remove them
-                    fear.qdel(job_ids[i])
-                    print 'Shell script %s job_id %s stuck, deleting' % (os.path.split(shell_files[i])[-1], job_ids[i])
-                    #### TODO - remove this code duplication
-                    # Tidy up fear
-                    fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]))
-                    fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]))
-                    fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1]))
-                    #### TODO - record the output and error files for future reference
-                    fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]) + '*') # Kills temporary output files
-                    # Tidy up local temporary directory
-                    os.remove(script_files[i])
-                    os.remove(shell_files[i])
-                    os.remove(flag_files[i])    
-                    job_ids[i] = None    
-                else:
-                    should_sleep = True
-        if all(job_finished):
-            fear_finished = True    
-        elif should_sleep:
-            if verbose:
-                fear.qstat()
-                print '%d of %d jobs complete' % (sum(job_finished), len(job_finished))
-                print '%d jobs running' % fear.jobs_running(update=False)
-                print '%d jobs loading' % fear.jobs_loading(update=False)
-                print '%d jobs queued' % fear.jobs_queued(update=False)
-                print 'Sleeping for %d seconds' % job_check_sleep
-                time.sleep(job_check_sleep)
-            should_sleep = False
+                        # If this is the last thing to happen in the loop then might as well sleep for a bit to wait for stack to free up
+                        should_sleep = True
+                elif (not job_finished[i]) and (not job_ids[i] is None):
+                    # Has the process terminated?
+                    if fear.job_terminated(job_ids[i], update=True):
+                        if not fear.file_exists(os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1])):
+                            # Job has finished but no output - resubmit later
+                            #### TODO - Record the output and error file - and potentially remove them
+                            print 'Shell script %s job_id %s failed' % (os.path.split(shell_files[i])[-1], job_ids[i])
+                            job_ids[i] = None
+                        else:
+                            # Job has finished successfully
+                            job_finished[i] = True
+                            # Tell the world
+                            if verbose:
+                                print '%d / %d jobs complete' % (sum(job_finished), len(job_finished))
+                        # Tidy up fear
+                        fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]))
+                        fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]))
+                        fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1]))
+                        #### TODO - record the output and error files for future reference
+                        fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]) + '*') # Kills temporary output files
+                        # Tidy up local temporary directory
+                        os.remove(script_files[i])
+                        os.remove(shell_files[i])
+                        os.remove(flag_files[i])    
+                        job_ids[i] = None                     
+                            
+                    elif not (fear.job_queued(job_ids[i]) or fear.job_running(job_ids[i]) \
+                              or fear.job_loading(job_ids[i])):
+                        # Job has some status other than running, queuing or loading - something is wrong, delete it
+                        #### TODO - Record the output and error file - and potentially remove them
+                        fear.qdel(job_ids[i])
+                        print 'Shell script %s job_id %s stuck, deleting' % (os.path.split(shell_files[i])[-1], job_ids[i])
+                        #### TODO - remove this code duplication
+                        # Tidy up fear
+                        fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(script_files[i])[-1]))
+                        fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]))
+                        fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(flag_files[i])[-1]))
+                        #### TODO - record the output and error files for future reference
+                        fear.rm(os.path.join(REMOTE_TEMP_PATH, os.path.split(shell_files[i])[-1]) + '*') # Kills temporary output files
+                        # Tidy up local temporary directory
+                        os.remove(script_files[i])
+                        os.remove(shell_files[i])
+                        os.remove(flag_files[i])    
+                        job_ids[i] = None    
+                    else:
+                        should_sleep = True
+            if all(job_finished):
+                fear_finished = True    
+            elif should_sleep:
+                if verbose:
+                    fear.qstat()
+                    print '%d of %d jobs complete' % (sum(job_finished), len(job_finished))
+                    print '%d jobs running' % fear.jobs_running(update=False)
+                    print '%d jobs loading' % fear.jobs_loading(update=False)
+                    print '%d jobs queued' % fear.jobs_queued(update=False)
+                    print 'Sleeping for %d seconds' % job_check_sleep
+                    time.sleep(job_check_sleep)
+                should_sleep = False
 
     #### TODO - return job output and error files as applicable (e.g. there may be multiple error files associated with one script)
     return output_files
