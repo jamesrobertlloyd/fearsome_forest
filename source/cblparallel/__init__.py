@@ -123,7 +123,7 @@ quit()
         # Loop through jobs, submitting jobs whenever fear usage low enough, re-submitting failed jobs
         while not fear_finished:
             for (i, code) in enumerate(scripts):
-                if (not job_finished[i]) and (job_ids[i] is None)
+                if (not job_finished[i]) and (job_ids[i] is None):
                     # This script has not been run - check number of jobs and potentially run
                     if fear.jobs_alive() <= max_jobs:
                         # Jobs can run, continue looping
