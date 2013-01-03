@@ -165,10 +165,11 @@ def rf_fear_test2(n=10,n_trees=10):
     X_train, X_test = X[:200], X[200:]
     y_train, y_test = y[:200], y[200:]
     # Params
-#    local_temp_path = os.path.abspath('../temp/')
-#    remote_temp_path = 'python/'
+    #local_temp_path = os.path.abspath('../temp/')
+    #remote_temp_path = 'python/'
     # Write data file locally
-    data_file = mkstemp_safe(cblparallel.config.LOCAL_TEMP_PATH, '.p')
+    #data_file = mkstemp_safe(cblparallel.config.LOCAL_TEMP_PATH, '.p')
+    data_file = mkstemp_safe(cblparallel.config.HOME_TEMP_PATH, '.p')
     with open(data_file, 'w') as f:
         pickle.dump((X_train, y_train, X_test), f)
     # Prepare code
@@ -178,9 +179,9 @@ def rf_fear_test2(n=10,n_trees=10):
                             'output_file' : '%(output_file)s',
                             'flag_file' : '%(flag_file)s'} for i in range(n)]
     # Submit to fear
-    with cblparallel.fear() as fear:
+    with cblparallel.fear(via_gate=True) as fear:
         fear.copy_to(data_file, os.path.join(cblparallel.config.REMOTE_TEMP_PATH, os.path.split(data_file)[-1]))
-        output_files = cblparallel.run_batch_on_fear(scripts)
+        output_files = cblparallel.run_batch_on_fear(scripts, via_gate=True)
         fear.rm(os.path.join(cblparallel.config.REMOTE_TEMP_PATH, os.path.split(data_file)[-1]))
 
     # Kill local data file
