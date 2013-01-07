@@ -263,7 +263,7 @@ def local_forest_test(n=10,n_trees=10):
 #    local_temp_path = os.path.abspath('../temp/')
 #    remote_temp_path = 'python/'
     # Write data file locally
-    data_file = mkstemp_safe(cblparallel.config.LOCAL_TEMP_PATH, '.p')
+    data_file = mkstemp_safe(cblparallel.config.HOME_TEMP_PATH, '.p')
     with open(data_file, 'w') as f:
         pickle.dump((X_train, y_train, X_test), f)
     # Prepare code
